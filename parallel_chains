@@ -1,0 +1,78 @@
+from dotenv import load_dotenv
+from langchain_groq import ChatGroq
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain.schema.runnable import RunnableParallel
+
+load_dotenv()
+
+summary_model = ChatGroq(model="llama-3.1-8b-instant", temperature=0.2)
+quiz_model = ChatGroq(model="deepseek-r1-distill-llama-70b", temperature=0.2)
+parser = StrOutputParser()
+
+structured_summary_prompt = PromptTemplate(
+    input_variables=["source_text"],
+    template=(
+        "Transform the following academic content into structured study notes with headings, subheadings, and bullet points.\n\n"
+        "Text:\n{source_text}"
+    )
+)
+
+quiz_prompt = PromptTemplate(
+    input_variables=["source_text"],
+    template=(
+        "Create 5 thoughtful Q&A pairs based on the following text. "
+        "The questions should test understanding of key concepts. Provide concise, informative answers.\n\n"
+        "{source_text}"
+    )
+)
+
+merge_prompt = PromptTemplate(
+    input_variables=["summary", "qa"],
+    template=(
+        "You are provided with structured study notes and a related quiz. "
+        "Combine them into a cleanly formatted study guide with the following structure:\n\n"
+        "**Study Notes**\n{summary}\n\n"
+        "**Practice Questions**\n{qa}\n\n"
+        "Ensure clarity and readability."
+    )
+)
+
+parallel_tasks = RunnableParallel({
+    "summary": structured_summary_prompt | summary_model | parser,
+    "qa": quiz_prompt | quiz_model | parser,
+})
+
+final_guide_chain = merge_prompt | summary_model | parser
+
+full_pipeline = parallel_tasks | final_guide_chain
+
+# New Source Text (Photosynthesis)
+input_text = {
+    "source_text": """
+Photosynthesis is a biological process by which green plants, algae, and some bacteria convert light energy, usually from the sun, into chemical energy stored in glucose. This process is vital for life on Earth as it provides oxygen and forms the base of most food chains.
+
+Key Stages:
+1. Light-dependent reactions: These take place in the thylakoid membranes of chloroplasts and require sunlight. Chlorophyll absorbs light energy, which splits water molecules into oxygen, protons, and electrons. Oxygen is released as a byproduct.
+2. Light-independent reactions (Calvin Cycle): Occur in the stroma of chloroplasts. Here, carbon dioxide is fixed into glucose using the ATP and NADPH produced during the light-dependent stage.
+
+Overall Equation:
+6CO₂ + 6H₂O + light energy → C₆H₁₂O₆ + 6O₂
+
+Importance:
+- Provides food for autotrophs and indirectly for heterotrophs.
+- Releases oxygen into the atmosphere, essential for respiration.
+- Helps regulate atmospheric CO₂ levels.
+
+Factors Affecting Photosynthesis:
+- Light intensity
+- Carbon dioxide concentration
+- Temperature
+- Water availability
+
+Fun Fact: Less than 1% of the solar energy reaching Earth is captured by photosynthesis, yet it powers nearly all ecosystems.
+"""
+}
+
+output = full_pipeline.invoke(input_text)
+print(output)
