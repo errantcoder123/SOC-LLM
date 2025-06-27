@@ -1,0 +1,31 @@
+from langchain_groq import ChatGroq
+from dotenv import load_dotenv
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+load_dotenv()
+
+llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    temperature=0.1,
+)
+
+report_prompt = PromptTemplate(
+    input_variables=["subject"],
+    template="Write an in-depth and structured report about the following topic:\n\n{subject}"
+)
+
+summary_prompt = PromptTemplate(
+    input_variables=["content"],
+    template="Summarize the following content into exactly 5 bullet points:\n\n{content}"
+)
+
+output_parser = StrOutputParser()
+
+pipeline = report_prompt | llm | output_parser | summary_prompt | llm | output_parser
+
+final_output = pipeline.invoke({"subject": "Renewable Energy in India"})
+
+print(final_output)
+
+pipeline.get_graph().print_ascii()
