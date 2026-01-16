@@ -1,0 +1,59 @@
+from dotenv import load_dotenv
+from langchain_groq import ChatGroq
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser, PydanticOutputParser
+from langchain.schema.runnable import RunnableBranch, RunnableLambda
+from pydantic import BaseModel, Field
+from typing import Literal
+
+
+load_dotenv()
+
+quick_model = ChatGroq(model="llama-3.1-8b-instant", temperature=0.2)
+response_model = ChatGroq(model="deepseek-r1-distill-llama-70b")
+
+class Classification(BaseModel):
+    tone: Literal["positive", "negative"] = Field(description="Overall tone of the statement")
+
+tone_parser = PydanticOutputParser(pydantic_object=Classification)
+
+tone_template = PromptTemplate(
+    template=(
+        "Evaluate the tone of this user comment. "
+        "Only classify it as 'positive' or 'negative'.\n\n"
+        "Comment:\n{user_comment}\n\n"
+        "{format_instructions}"
+    ),
+    input_variables=["user_comment"],
+    partial_variables={"format_instructions": tone_parser.get_format_instructions()}
+)
+
+
+positive_reply_template = PromptTemplate.from_template(
+    "This feedback was great: \"{user_comment}\". Write a professional, kind reply to thank them."
+)
+
+negative_reply_template = PromptTemplate.from_template(
+    "The user said: \"{user_comment}\". Write a thoughtful and polite response acknowledging the concern."
+)
+
+
+tone_chain = tone_template | quick_model | tone_parser
+
+response_router = RunnableBranch(
+    (lambda result: result.tone == "positive", positive_reply_template | response_model | StrOutputParser()),
+    (lambda result: result.tone == "negative", negative_reply_template | response_model | StrOutputParser()),
+    RunnableLambda(lambda _: "Unable to determine sentiment. Please review manually.")
+)
+
+
+response_pipeline = tone_chain | response_router
+
+
+if __name__ == "__main__":
+    test_comment = {"user_comment": "The customer support was fantastic and quick!"}
+    final_output = response_pipeline.invoke(test_comment)
+    print(final_output)
+
+    
+    response_pipeline.get_graph().print_ascii()

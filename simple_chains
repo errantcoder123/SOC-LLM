@@ -1,0 +1,27 @@
+from langchain_groq import ChatGroq
+from dotenv import load_dotenv
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+
+load_dotenv()
+
+groq_llm = ChatGroq(
+    model="llama-3.1-8b-instant",
+    temperature=0.1,
+)
+
+fact_prompt = PromptTemplate(
+    input_variables=["place"],
+    template="List five fascinating and lesser-known facts about {place}. Ensure they are concise and interesting."
+)
+
+
+string_output = StrOutputParser()
+
+fact_chain = fact_prompt | groq_llm | string_output
+
+output = fact_chain.invoke({"place": "Indore"})
+
+print(output)
+
+fact_chain.get_graph().print_ascii()
